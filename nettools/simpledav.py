@@ -99,11 +99,13 @@ class DAVLocation(object):
                 self.port = 443
         self.tls = (url_result.scheme.lower() != "http")
         self.tls_custom_chain_file = tls_custom_chain_file
-        self.caldav_path = url_result.path
+        self.dav_path = url_result.path
         try:
-            self.caldav_path.decode("utf-8", "replace")
+            self.dav_path.decode("utf-8", "replace")
         except AttributeError:
             pass
+        while self.dav_path.find("//") >= 0:
+            self.dav_path = self.dav_path.replace("//", "/")
         self._basic_auth_realm = None
         self._supported_methods = None
         self._cached_path_info = dict()
@@ -118,7 +120,7 @@ class DAVLocation(object):
 
     def _fetch_options(self):
         (response_headers, response_obj) = self.do_request(
-            "OPTIONS", self.caldav_path,
+            "OPTIONS", self.dav_path,
             textwrap.dedent("""\
                 <?xml version="1.0" encoding="utf-8"?>
                 <D:propfind xmlns:D="DAV:">
@@ -176,6 +178,8 @@ class DAVLocation(object):
                 info = self._get_path_info(as_bytes(file_path) + b"/")
                 if info is None:
                     return False
+            else:
+                return False
         return True
 
     def open(self, file_path, mode="r", encoding="ascii",
@@ -235,7 +239,7 @@ class DAVLocation(object):
                     return
                 self.uploaded = True
                 dav_obj._write_data(fpath, file_path)
-
+    
             def write(self, value):
                 fhandle.write(value)
         return Writer()
@@ -244,9 +248,15 @@ class DAVLocation(object):
         byte_amount = os.path.getsize(fpath)
         with open(fpath, "rb") as f:
             (response_headers, response_obj) = self.do_request(
-                "PUT", webdav_path_joiner(self.caldav_path, file_path),
+                "PUT", webdav_path_joiner(self.dav_path, file_path),
                 f, headers=["Content-Length: " + str(byte_amount),
                 "Content-Type: application/octet-stream"])
+            if response_headers[0][1] >= 400 and \
+                    response_headers[0][1] < 600:
+                raise OSError("server error: " +
+                    " ".join([(str(t) if type(t) != bytes else
+                    t.decode("utf-8", "replace")) for t \
+                    in response_headers[0]]))
             response_obj.close()
 
     def _for_reading_open(self, file_path, binary=True,
@@ -261,12 +271,20 @@ class DAVLocation(object):
             if end <= start or start < 0:
                 raise ValueError("requested invalid partial range")
             extra_headers.append(b"Range: bytes=" + str(
-                start).encode("ascii") + "-" + str(end).encode('ascii'))
+                start).encode("ascii") + b"-" + str(end).encode('ascii'))
 
         (response_headers, response_obj) = self.do_request(
-            "GET", webdav_path_joiner(self.caldav_path, file_path),
+            "GET", webdav_path_joiner(self.dav_path, file_path),
             headers=extra_headers,
             read_as_binary=binary, read_encoding=encoding)
+        if partial_range != None:
+            if response_headers[0][1] != 206:
+                raise OSError("unexpected server response " +
+                    str(response_headers[0]))
+        else:
+            if response_headers[0][1] != 200:
+                raise OSError("unexpected server response " +
+                    str(response_headers[0]))
         if binary:
             return response_obj
         else:
@@ -352,7 +370,7 @@ class DAVLocation(object):
         listing = self.listdir(file_path)
         if listing != None:
             raise OSError("path is a directory")
-        del_path = webdav_path_joiner(self.caldav_path,
+        del_path = webdav_path_joiner(self.dav_path,
             file_path)
         if response_headers[0][1] == 204:
             return
@@ -370,7 +388,7 @@ class DAVLocation(object):
         if only_if_empty and listing != None and \
                 len(listing) > 0:
             raise OSError("directory not empty")
-        del_path = webdav_path_joiner(self.caldav_path,
+        del_path = webdav_path_joiner(self.dav_path,
             file_path)
         if not del_path.endswith(b"/"):
             del_path += b"/"
@@ -393,13 +411,17 @@ class DAVLocation(object):
             raise OSError("this server doesn't support " +
                 "creating directories")
         (response_headers, response_obj) = self.do_request(
-            "MKCOL", webdav_path_joiner(self.caldav_path,
+            "MKCOL", webdav_path_joiner(self.dav_path,
                 file_path))
         if response_headers[0][1] == 201:
             return
         elif response_header[0][1] == 405:
             raise OSError("can't create directory here " +
                 "- maybe the path exists already?")
+        elif response_header[0][1] >= 400 and \
+                response_headers[0][1]:
+            raise OSError("server error: " +
+                str(response_header[0]))
         else:
             raise OSError("unexpected response code, " +
                 "creation may have failed (code " +
@@ -442,7 +464,7 @@ class DAVLocation(object):
             raise OSError("this server is not supported, " +
                 "lacks PROPFIND command")
         (response_headers, response_obj) = self.do_request(
-            "PROPFIND", webdav_path_joiner(self.caldav_path, path),
+            "PROPFIND", webdav_path_joiner(self.dav_path, path),
             textwrap.dedent("""\
                 <?xml version="1.0" encoding="utf-8"?>
                 <D:propfind xmlns:D="DAV:">
@@ -453,7 +475,7 @@ class DAVLocation(object):
                   </D:prop>
                 </D:propfind>"""))
         base_url = urllib.parse.quote(
-            webdav_path_joiner(self.caldav_path, path))
+            webdav_path_joiner(self.dav_path, path))
         response = response_obj.read(1024 * 10)
         response_obj.close()
         result = []
@@ -541,10 +563,13 @@ class DAVLocation(object):
 
     def do_request(self, verb, location,
             body=b"", headers=[], follow_redirects=3,
-            read_as_binary=True, read_encoding=None):
+            read_as_binary=True, read_encoding=None,
+            debug=False):
         location = as_bytes(location)
         if len(location) == 0:
             location = b"/"
+        while location.find(b"//") >= 0:
+            location = location.replace(b"//", b"/")
         try:
             verb = verb.decode("utf-8", "replace")
         except AttributeError:
@@ -584,7 +609,10 @@ class DAVLocation(object):
             upw = as_bytes(self.user) + b":" + as_bytes(self.password)
             headers.append(b"Authorization: Basic " +
                 base64.b64encode(upw))
-                
+
+        if debug:
+            print("nettools.simpledav.DAVLocation.do_request: " +
+                "all headers: " + str(headers))
         (response_headers, body_obj) = nettools.do_http_style_request(
             self.host, self.port,
             tls_enabled=self.tls,
