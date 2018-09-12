@@ -83,7 +83,7 @@ class DAVLocation(object):
 
     def __init__(self, url, tls_custom_chain_file=None):
         url_result = urllib.parse.urlparse(url)
-        self.user_agent = "trividav/0.1"
+        self.user_agent = "python-nettools-simpledav/0.1"
         self.host = url_result.hostname
         self.port = url_result.port
         self.password = url_result.password
@@ -178,11 +178,18 @@ class DAVLocation(object):
                     return False
         return True
 
-    def open(self, file_path, mode="r", encoding="ascii"):
+    def open(self, file_path, mode="r", encoding="ascii",
+            partial_range=None):
+        # Sanity checks:
         if self.isdir(file_path):
             raise OSError("path is a directory")
         if not mode in ["r", "rb", "w", "wb"]:
             raise RuntimeError("mode not supported: '" + str(mode) + "'")
+        if partial_range and mode in ["w", "wb"]:
+            raise ValueError("partial_range not supported for mode '" +
+                mode + "'")
+
+        # Do it:
         if mode == "w":
             return self._open_for_writing(file_path,
                 binary=False, encoding=encoding)
@@ -191,7 +198,8 @@ class DAVLocation(object):
                 binary=True)
         elif mode == "rb" or mode == "r":
             return self._for_reading_open(file_path,
-                binary=(mode == "rb"), encoding=encoding)
+                binary=(mode == "rb"), encoding=encoding,
+                partial_range=partial_range)
 
     def _open_for_writing(self, file_path, binary=True,
             encoding="ascii"):
@@ -242,9 +250,22 @@ class DAVLocation(object):
             response_obj.close()
 
     def _for_reading_open(self, file_path, binary=True,
-            encoding="ascii"):
+            encoding="ascii", partial_range=None):
+        extra_headers=[]
+        if partial_range != None:
+            if len(partial_range) != 2:
+                raise ValueError("partial range must be a tuple " +
+                    "with two values")
+            start = int(partial_range[0])
+            end = int(partial_range[1])
+            if end <= start or start < 0:
+                raise ValueError("requested invalid partial range")
+            extra_headers.append(b"Range: bytes=" + str(
+                start).encode("ascii") + "-" + str(end).encode('ascii'))
+
         (response_headers, response_obj) = self.do_request(
             "GET", webdav_path_joiner(self.caldav_path, file_path),
+            headers=extra_headers,
             read_as_binary=binary, read_encoding=encoding)
         if binary:
             return response_obj
