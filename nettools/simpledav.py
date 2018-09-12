@@ -62,7 +62,7 @@ def headers_value(headers, name):
 class DAVLocation(object):
     @staticmethod
     def from_options(host, port="default",
-            caldav_path=b"/",
+            dav_path=b"/",
             tls=True,
             tls_custom_chain_file=None):
         protocol = "http://"
@@ -78,7 +78,7 @@ class DAVLocation(object):
             host = "[" + host + "]"
         return DAVLocation(protocol +
             host + ":" + str(port) + "/" +
-            urllib.parse.quote(caldav_path),
+            urllib.parse.quote(dav_path),
             tls_custom_chain_file=tls_custom_chain_file)
 
     def __init__(self, url, tls_custom_chain_file=None):
