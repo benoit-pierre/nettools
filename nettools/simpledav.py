@@ -612,7 +612,9 @@ class DAVLocation(object):
 
         if debug:
             print("nettools.simpledav.DAVLocation.do_request: " +
-                "all headers: " + str(headers))
+                "all headers: " + str([(header if
+                str(header).lower().find("authorization") < 0 else
+                "<AUTHORIZATION HEADER HIDDEN>") for header in headers]))
         (response_headers, body_obj) = nettools.do_http_style_request(
             self.host, self.port,
             tls_enabled=self.tls,
