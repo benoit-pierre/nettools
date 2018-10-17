@@ -4,7 +4,8 @@
 import setuptools
 
 with open("README.md", "r") as fh:
-    long_description = fh.read()
+    with open("LICENSE.md", "r") as f2:
+        long_description = fh.read().rstrip() + "\n\n" + f2.read()
 
 with open("requirements.txt") as fh:
     dependencies = [l.strip() for l in fh.read().replace("\r\n", "\n").\
@@ -22,7 +23,6 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/JonasT/nettools",
-    data_files = [("", ["LICENSE.md"])],
     classifiers=[
         "Programming Language :: Python :: 3",
         "Operating System :: OS Independent",
