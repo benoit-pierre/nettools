@@ -45,7 +45,9 @@ def is_metered():
     return False
 
 def dns_lookup(name, single_target=True):
+    last_error = None
     def dns_lookup_multitarget(name):
+        nonlocal last_error
         try:
             ip = ipaddress.ip_address(name)
             # If we arrived here, it's a valid ip already.
@@ -56,20 +58,24 @@ def dns_lookup(name, single_target=True):
             result = socket.getaddrinfo(
                 name, None, socket.AF_INET6)
             if len(result) > 0:
-                return [entry[4][0] for entry in result]
-        except socket.gaierror:
+                return [str(entry[4][0]) for entry in result]
+        except socket.gaierror as e:
+            last_error = e
             try:
                 result = socket.getaddrinfo(
                     name, None, socket.AF_INET)
-            except socket.gaierror:
+            except socket.gaierror as e:
+                last_error = e
                 return []
             if len(result) > 0:
-                return [entry[4][0] for entry in result]
+                return [str(entry[4][0]) for entry in result]
     targets = dns_lookup_multitarget(name)
+    assert(targets != None)
     if single_target:
         if len(targets) > 0:
             return random.choice(targets)
-        return None
+        assert(last_error != None)
+        raise last_error
     return targets
 
 _contexts = dict()
@@ -127,12 +133,11 @@ class SimpleTCPClient(object):
     def target(self):
         if self._target is None:
             if not self._target_resolve_failed:
-                self._target = dns_lookup(self.host)
-                if self._target != None:
-                    return self._target
-                self._target_resolve_failed = True
-            raise OSError("failed to resolve host: " +
-                str(self.host))
+                try:
+                    self._target = dns_lookup(self.host)
+                except Exception as e:
+                    self._target_resolve_failed = True
+                    raise e
         return self._target
 
     def close(self):
