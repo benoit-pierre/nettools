@@ -94,6 +94,9 @@ def get_tls_context(unsafe_legacy, system_certs, extra_chain_path):
     if not unsafe_legacy:
         client_context.options |= ssl.OP_NO_TLSv1
     if extra_chain_path != None:
+        if not os.path.exists(extra_chain_path):
+            raise OSError("non-existing file specified " +
+                "as extra chain path: " + str(extra_chain_path))
         client_context.load_verify_location(
             cafile=extra_chain_path)
     if system_certs:
