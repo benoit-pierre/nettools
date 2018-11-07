@@ -181,6 +181,15 @@ class SimpleTCPClient(object):
             self.socket.connect((target, self.port))
         except Exception as e:
             self.close()
+            import ssl
+            if self.tlsenabled and isinstance(e, ssl.SSLError):
+                print("ERROR: Got ssl faillure, config info: " +
+                    str({"tls_extra_chain_path":
+                        self.tls_extra_chain_path,
+                        "tls_use_system_certificates":
+                        self.use_system_certificates,
+                        "tls_support_unsafe_legacy":
+                        self.tls_support_unsafe_legacy}))
             raise e
 
     def write(self, msg):
