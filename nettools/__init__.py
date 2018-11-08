@@ -121,7 +121,7 @@ class SimpleTCPClient(object):
         self._connection = None
 
     def set_custom_tls_certificate_chain(self, chains,
-            disable_systme_certs=True):
+            disable_system_certs=True):
         if not self.tls_enabled:
             raise ValueError("cannot use this " +
                 "option when not using TLS")
@@ -129,7 +129,7 @@ class SimpleTCPClient(object):
             raise OSError("already connected, changing " +
                 "setting now is not implemented")
         self.tls_extra_chain_path = chains
-        if disable_systme_certs:
+        if disable_system_certs:
             self.tls_use_system_certificates = False
 
     @property
