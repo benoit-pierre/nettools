@@ -185,7 +185,7 @@ class SimpleTCPClient(object):
         except Exception as e:
             self.close()
             import ssl
-            if self.tlsenabled and isinstance(e, ssl.SSLError):
+            if self.tls_enabled and isinstance(e, ssl.SSLError):
                 print("ERROR: Got ssl faillure, config info: " +
                     str({"tls_extra_chain_path":
                         self.tls_extra_chain_path,
