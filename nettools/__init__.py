@@ -98,7 +98,7 @@ def get_tls_context(unsafe_legacy, system_certs, extra_chain_path):
         if not os.path.exists(extra_chain_path):
             raise OSError("non-existing file specified " +
                 "as extra chain path: " + str(extra_chain_path))
-        client_context.load_verify_location(
+        client_context.load_verify_locations(
             cafile=extra_chain_path)
     if system_certs:
         client_context.load_default_certs()
