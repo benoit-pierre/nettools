@@ -190,7 +190,7 @@ class SimpleTCPClient(object):
                     str({"tls_extra_chain_path":
                         self.tls_extra_chain_path,
                         "tls_use_system_certificates":
-                        self.use_system_certificates,
+                        self.tls_use_system_certificates,
                         "tls_support_unsafe_legacy":
                         self.tls_support_unsafe_legacy}))
             raise e
