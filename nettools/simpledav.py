@@ -183,7 +183,7 @@ class DAVLocation(object):
         return True
 
     def open(self, file_path, mode="r", encoding="ascii",
-            partial_range=None):
+            partial_range=None, progress_callback=None):
         # Sanity checks:
         if self.isdir(file_path):
             raise OSError("path is a directory")
@@ -196,17 +196,21 @@ class DAVLocation(object):
         # Do it:
         if mode == "w":
             return self._open_for_writing(file_path,
-                binary=False, encoding=encoding)
+                binary=False, encoding=encoding,
+                progress_callback=progress_callback)
         elif mode == "wb":
             return self._open_for_writing(file_path,
-                binary=True)
+                binary=True,
+                progress_callback=progress_callback)
         elif mode == "rb" or mode == "r":
             return self._for_reading_open(file_path,
                 binary=(mode == "rb"), encoding=encoding,
                 partial_range=partial_range)
+        else:
+            raise RuntimeError("mode not supported")
 
     def _open_for_writing(self, file_path, binary=True,
-            encoding="ascii"):
+            encoding="ascii", progress_callback=None):
         import tempfile
         (fd, fpath) = tempfile.mkstemp(
             prefix="trividav-upload-", suffix=".raw")
@@ -238,19 +242,25 @@ class DAVLocation(object):
                 if self.uploaded:
                     return
                 self.uploaded = True
-                dav_obj._write_data(fpath, file_path)
+                dav_obj._write_data(fpath, file_path,
+                    progress_callback=progress_callback)
     
             def write(self, value):
                 fhandle.write(value)
         return Writer()
 
-    def _write_data(self, fpath, file_path):
+    def _write_data(self, fpath, file_path, progress_callback=None):
         byte_amount = os.path.getsize(fpath)
         with open(fpath, "rb") as f:
+            def report_progress(action, processed_bytes, total_bytes):
+                if action != "send" or progress_callback is None:
+                    return
+                progress_callback(processed_bytes)
             (response_headers, response_obj) = self.do_request(
                 "PUT", webdav_path_joiner(self.dav_path, file_path),
                 f, headers=["Content-Length: " + str(byte_amount),
-                "Content-Type: application/octet-stream"])
+                "Content-Type: application/octet-stream"],
+                progress_callback=report_progress)
             if response_headers[0][1] >= 400 and \
                     response_headers[0][1] < 600:
                 raise OSError("server error: " +
