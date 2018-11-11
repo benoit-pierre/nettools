@@ -110,17 +110,14 @@ class DAVLocation(object):
         self._supported_methods = None
         self._cached_path_info = dict()
 
-    @property
-    def supported_methods(self):
-        if self._supported_methods != None:
-            return self._supported_methods
+    def supported_methods(self, path="/"):
         options = self._fetch_options()
-        self._supported_methods = options["methods"]
-        return self._supported_methods
+        return options["methods"]
 
-    def _fetch_options(self):
+    def _fetch_options(self, on_path="/"):
         (response_headers, response_obj) = self.do_request(
-            "OPTIONS", self.dav_path,
+            "OPTIONS", self.normalize_webdav_path(
+                self.dav_path + "/" + on_path),
             textwrap.dedent("""\
                 <?xml version="1.0" encoding="utf-8"?>
                 <D:propfind xmlns:D="DAV:">
@@ -137,7 +134,8 @@ class DAVLocation(object):
                 "is your webdav url correct?")
         if headers_value(response_headers[1:], "allow") is None:
             raise OSError("protocol error: " +
-                "missing 'Allow' header in OPTIONS request")
+                "missing 'Allow' header in OPTIONS request, " +
+                "HTTP response is: " + str(response_headers[0]))
         def as_list(headerkey):
             v = headers_value(response_headers[1:], headerkey)
             if v is None:
@@ -417,9 +415,10 @@ class DAVLocation(object):
                 str(response_headers[0][1]) + ")")
 
     def mkdir(self, file_path):
-        if not "MKCOL" in self.supported_methods:
+        if not "MKCOL" in self.supported_methods(file_path):
             raise OSError("this server doesn't support " +
-                "creating directories")
+                "creating directories, or the path " +
+                "exists already")
         (response_headers, response_obj) = self.do_request(
             "MKCOL", webdav_path_joiner(self.dav_path,
                 file_path))
@@ -470,7 +469,7 @@ class DAVLocation(object):
                 self._cached_path_info[path][1] + 5.0 >\
                 time.monotonic():
             return self._cached_path_info[path][0]
-        if not "PROPFIND" in self.supported_methods:
+        if not "PROPFIND" in self.supported_methods(path):
             raise OSError("this server is not supported, " +
                 "lacks PROPFIND command")
         (response_headers, response_obj) = self.do_request(
@@ -578,6 +577,8 @@ class DAVLocation(object):
         location = as_bytes(location)
         if len(location) == 0:
             location = b"/"
+        if not location.startswith(b"/"):
+            location = b"/" + location
         while location.find(b"//") >= 0:
             location = location.replace(b"//", b"/")
         try:
