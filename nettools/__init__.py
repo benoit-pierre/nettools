@@ -23,6 +23,7 @@ import ipaddress
 import os
 import random
 import socket
+import time
 
 def is_metered():
     try:
@@ -259,7 +260,8 @@ def do_http_style_request(host, port,
         send_headers=[], send_body=b"",
         operations_timeout=10,
         auto_evaluate_chunked_encoding=True,
-        auto_evaluate_content_size=True):
+        auto_evaluate_content_size=True,
+        progress_callback=None):
     if tls_extra_chain_path != None:
         if tls_dont_use_system_certs_if_extra_chain:
             tls_use_system_certificates = False
@@ -282,10 +284,23 @@ def do_http_style_request(host, port,
         client.write(b"\r\n".join(
                 [as_bytes(l) for l in send_headers]) +
                 b"\r\n\r\n")
+
+    # Send client body:
+    chunk_size = 1024 * 4
+    send_total = None
+    send_current = 0
+    last_progress_update = time.monotonic() - 2
+    def send_progress_update():
+        nonlocal last_progress_update
+        if last_progress_update + 0.5 < time.monotonic():
+            last_progress_update = time.monotonic()
+            if progress_callback != None:
+                progress_callback(
+                    "send", send_current, send_total)
     if hasattr(send_body, "read"):
         # File like object:
         while True:
-            content = send_body.read(512)
+            content = send_body.read(chunk_size)
             if len(content) == 0:
                 break
             try:
@@ -293,12 +308,36 @@ def do_http_style_request(host, port,
             except AttributeError:
                 pass
             client.write(content)
+            send_current += len(content)
+            send_progress_update()
     else:
-        client.write(as_bytes(send_body))
+        send_bytes = as_bytes(send_body)
+        send_total = len(send_bytes)
+        while len(send_bytes) > 0:
+            client.write(send_bytes[:chunk_size])
+            send_current += len(send_bytes[:chunk_size])
+            send_bytes = send_bytes[chunk_size:]
+            send_progress_update()
+
+    # Drop what we no longer need:
+    del(send_body)
+    try:
+        del(send_bytes)
+    except NameError:
+        pass
 
     # Get response headers:
     received_response = None
     received_headers = []
+    recv_total = None
+    recv_current = 0
+    def recv_progress_update():
+        nonlocal last_progress_update
+        if last_progress_update + 1 < time.monotonic():
+            last_progress_update = time.monotonic()
+            if progress_callback != None:
+                progress_callback(
+                    "receive", recv_current, recv_total)
     while True:
         line = client.readline(max_length=1024)
         if len(line) > 0:
@@ -330,6 +369,7 @@ def do_http_style_request(host, port,
             if k.decode("utf-8", "replace").lower() == "content-length":
                 try:
                     content_size = int(v.decode("utf-8", "replace").strip())
+                    recv_total = content_size
                 except (ValueError, TypeError):
                     pass
     if auto_evaluate_chunked_encoding:
@@ -388,13 +428,14 @@ def do_http_style_request(host, port,
         def __init__(self):
             self.stream_pos = 0
             self.is_readable = True
+            self.reported_nonreadable = False
 
         @property
         def closed(self):
             return (not self.is_readable)
 
         def fileno(self):
-            raise NotImplementedError("operation not uspported")
+            raise NotImplementedError("operation not supported")
 
         def isatty(self):
             return False
@@ -407,23 +448,34 @@ def do_http_style_request(host, port,
             self.is_readable = False
 
         def read(self, size=None):
+            nonlocal recv_current
             if not self.is_readable:
-                raise OSError("stream is closed")
+                if not self.reported_nonreadable:
+                    self.reported_nonreadable = True
+                    return b""
+                else:
+                    raise OSError("stream is closed")
             if size == 0:
                 return b""
-            if size == None:
-                result = b""
-                while True:
-                    addition = read_contents(512)
-                    if len(addition) == 0:
-                        break
-                    result += addition
-                self.stream_pos += len(result)
-                return result
-            result = read_contents(size)
+            result = b""
+            while size is None or size > 0:
+                read_amount = chunk_size
+                if size != None:
+                    read_amount = min(read_amount, size)
+                addition = read_contents(read_amount)
+                if len(addition) == 0:
+                    self.is_readable = False
+                    if len(result) > 0:
+                        self.reported_nonreadable = False
+                    else:
+                        self.reported_nonreadable = True
+                    break
+                if size != None:
+                    size -= len(addition)
+                recv_current += len(addition)
+                result += addition
             self.stream_pos += len(result)
-            if len(result) == 0:
-                self.is_readable = False
+            recv_progress_update()
             return result
 
         def readline(self, size=-1):
