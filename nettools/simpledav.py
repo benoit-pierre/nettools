@@ -573,7 +573,8 @@ class DAVLocation(object):
     def do_request(self, verb, location,
             body=b"", headers=[], follow_redirects=3,
             read_as_binary=True, read_encoding=None,
-            debug=False):
+            debug=False,
+            progress_callback=None):
         location = as_bytes(location)
         if len(location) == 0:
             location = b"/"
@@ -633,7 +634,8 @@ class DAVLocation(object):
             send_headers=headers, send_body=body,
             operations_timeout=10,
             auto_evaluate_chunked_encoding=True,
-            auto_evaluate_content_size=True)
+            auto_evaluate_content_size=True,
+            progress_callback=progress_callback)
         def response_header_value(name):
             for header in response_headers[1:]:
                 if get_header_name(header).lower() == name.lower():
