@@ -384,6 +384,7 @@ def do_http_style_request(host, port,
 
     # Get contents:
     read_state = {"content-size-left": content_size,
+        "content-size-total": content_size,
         "chunk-data-left": 0, "chunked": chunked_transfer}
     def read_contents(amount):
         nonlocal read_state
@@ -437,6 +438,14 @@ def do_http_style_request(host, port,
         @property
         def closed(self):
             return (not self.is_readable)
+
+        @property
+        def len(self):
+            nonlocal read_state
+            if "content-size-total" in read_state and \
+                    read_state["content-size-total"] is not None:
+                return max(0, int(read_state["content-size-total"]))
+            raise ValueError("no content length available")
 
         def fileno(self):
             raise NotImplementedError("operation not supported")
