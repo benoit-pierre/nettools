@@ -1,6 +1,6 @@
 
 '''
-nettools - Copyright 2018 python nettools team, see AUTHORS.md
+nettools - Copyright 2018-2019 python nettools team, see AUTHORS.md
 
 This software is provided 'as-is', without any express or implied
 warranty. In no event will the authors be held liable for any damages

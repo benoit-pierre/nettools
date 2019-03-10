@@ -1,6 +1,6 @@
 
 '''
-nettools - Copyright 2018 python nettools team, see AUTHORS.md
+nettools - Copyright 2018-2019 python nettools team, see AUTHORS.md
 
 This software is provided 'as-is', without any express or implied
 warranty. In no event will the authors be held liable for any damages
@@ -380,6 +380,8 @@ class DAVLocation(object):
             raise OSError("path is a directory")
         del_path = webdav_path_joiner(self.dav_path,
             file_path)
+        (response_headers, response_obj) = self.do_request(
+            "DELETE", del_path)
         if response_headers[0][1] == 204:
             return
         elif response_headers[0][1] == 404:
@@ -424,13 +426,13 @@ class DAVLocation(object):
                 file_path))
         if response_headers[0][1] == 201:
             return
-        elif response_header[0][1] == 405:
+        elif response_headers[0][1] == 405:
             raise OSError("can't create directory here " +
                 "- maybe the path exists already?")
-        elif response_header[0][1] >= 400 and \
+        elif response_headers[0][1] >= 400 and \
                 response_headers[0][1]:
             raise OSError("server error: " +
-                str(response_header[0]))
+                str(response_headers[0]))
         else:
             raise OSError("unexpected response code, " +
                 "creation may have failed (code " +

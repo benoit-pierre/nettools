@@ -1,6 +1,6 @@
 
 '''
-nettools - Copyright 2018 python nettools team, see AUTHORS.md
+nettools - Copyright 2018-2019 python nettools team, see AUTHORS.md
 
 This software is provided 'as-is', without any express or implied
 warranty. In no event will the authors be held liable for any damages
@@ -21,7 +21,8 @@ freely, subject to the following restrictions:
 
 import os
 import sys
-sys.path = [os.path.abspath(os.path.dirname(__file__))] + sys.path
+sys.path = [os.path.abspath(os.path.join(
+                            os.path.dirname(__file__), ".."))] + sys.path
 
 import nettools.htmlparse as htmlparse
 
