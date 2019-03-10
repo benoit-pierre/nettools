@@ -21,8 +21,6 @@ freely, subject to the following restrictions:
 
 import html.parser
 
-import nettools.htmlparse as htmlparse
-
 
 class CSSAttribute(object):
     def __init__(self, name, value):
@@ -92,31 +90,6 @@ def parse_css_color(color):
     elif len(color) == 7 and color[0] == "#" and \
             is_hex(color[1:]):
         return color
-    return None
-
-
-def element_text_color(element):
-    if type(element) == str:
-        parse_result = htmlparse.parse(element)
-        if len(parse_result) == 0:
-            return None
-        element = parse_result[0]
-    if element.node_type != "element":
-        return None
-    for node_attr in element.attributes:
-        if node_attr.lower() == "style":
-            values = parse_css_inline_attributes(
-                element.attributes[node_attr]
-            )
-            for attr in values:
-                if attr.name.lower() == "color":
-                    color = parse_css_color(attr.value)
-                    if color != None:
-                        return color
-        if node_attr.lower() == "color":
-            color = parse_css_color(element.attributes[node_attr])
-            if color != None:
-                return color
     return None
 
 
