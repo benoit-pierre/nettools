@@ -102,9 +102,9 @@ cdef class CSSSelector:
         selector_string = selector_string.strip()
         self.items = [i.strip() for i in selector_string.split(" ")
                       if len(i.strip()) > 0]
+        self.applies_any = False
         if len(self.items) == 1 and self.items[0] == "*":
             self.applies_any = True
-        self.applies_any = False
         self._specificity = 0
         for item in self.items:
             if item == ">" or item == "*":
