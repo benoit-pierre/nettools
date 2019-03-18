@@ -75,7 +75,8 @@ def extensions():
                 os.path.join(root, f)))
             assert(full_path.startswith(base))
             module = "nettools." + full_path[len(base):].\
-                replace(os.path.sep, ".").replace("/", ".")
+                replace(os.path.sep, ".").replace("/", ".").\
+                replace("..", ".")
             if module.endswith(".pyx"):
                 module = module[:-len(".pyx")]
             if module.startswith("."):
