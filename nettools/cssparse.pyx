@@ -100,7 +100,7 @@ cdef class CSSSelector:
 
     def __init__(self, str selector_string):
         selector_string = selector_string.strip()
-        self.items = [i.strip() for i in selector_string.split(" ")
+        self.items = [i.strip() for i in selector_string.split()
                       if len(i.strip()) > 0]
         self.applies_any = False
         if len(self.items) == 1 and self.items[0] == "*":
