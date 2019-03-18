@@ -26,30 +26,41 @@ import re
 def unescape(t):
     return python_html_unescape(t)
 
-def is_punctuation(c):
-    if (c in set([
-            ",", ".", "!", "?", ";", ":",
-            "-", "–", #endash,
-            "—", #emdash,
-            "‘", "’", "”", "“", "\"", "'",
-            "(", ")", "[", "]", "~",
-            "*", "#", "%", "^", "=",
-            "{", "}", "+", "$", "&",
-            "<", ">", "/", "\\", "@"])):
+cdef frozenset punctuation_set = frozenset({
+    ",", ".", "!", "?", ";", ":",
+    "-", "–", #endash,
+    "—", #emdash,
+    "‘", "’", "”", "“", "\"", "'",
+    "(", ")", "[", "]", "~",
+    "*", "#", "%", "^", "=",
+    "{", "}", "+", "$", "&",
+    "<", ">", "/", "\\", "@"
+})
+
+cpdef object is_punctuation(str c):
+    """ Returns True if certain it is punctuation,
+        False if certain it is NOT punctuation,
+        None if uncertain.
+
+        (unicode makes things complicated, so we're decidedly giving a
+         differentiated result for unusual characters)
+    """
+    if c in punctuation_set:
         return True
     if ord(c) <= 127:
         return False
     return None
 
-def is_whitespace(c):
-    return c in set([
-        " ", "\n", "\t", "\r"])
+cdef frozenset whitespace_set = frozenset({" ", "\n", "\t", "\r"})
 
-def html_escape(t):
+cpdef int is_whitespace(str c):
+    return c in whitespace_set
+
+cpdef str html_escape(t):
     import html
     return html.escape(t).replace("\u00A0", "&nbsp;")
 
-class TextNode(object):
+class TextNode:
     def __init__(self, text):
         self.content = text
         self.node_type = "text"
