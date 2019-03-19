@@ -102,6 +102,9 @@ setuptools.setup(
     description="A pure python, self-contained package " +
         "of net/web helpers for TCP, WebDAV, HTML/XML, ...",
     packages=["nettools"],
+    package_data={"nettools": [
+        "*.pxd",
+    ]},
     install_requires=dependencies,
     long_description=long_description,
     long_description_content_type="text/markdown",

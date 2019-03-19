@@ -23,42 +23,17 @@ import copy
 from html.parser import unescape as python_html_unescape
 import re
 
+from nettools.texthelpers import is_punctuation, is_whitespace
+
+
 def unescape(t):
     return python_html_unescape(t)
 
-cdef frozenset punctuation_set = frozenset({
-    ",", ".", "!", "?", ";", ":",
-    "-", "–", #endash,
-    "—", #emdash,
-    "‘", "’", "”", "“", "\"", "'",
-    "(", ")", "[", "]", "~",
-    "*", "#", "%", "^", "=",
-    "{", "}", "+", "$", "&",
-    "<", ">", "/", "\\", "@"
-})
-
-cpdef object is_punctuation(str c):
-    """ Returns True if certain it is punctuation,
-        False if certain it is NOT punctuation,
-        None if uncertain.
-
-        (unicode makes things complicated, so we're decidedly giving a
-         differentiated result for unusual characters)
-    """
-    if c in punctuation_set:
-        return True
-    if ord(c) <= 127:
-        return False
-    return None
-
-cdef frozenset whitespace_set = frozenset({" ", "\n", "\t", "\r"})
-
-cpdef int is_whitespace(str c):
-    return c in whitespace_set
 
 cpdef str html_escape(t):
     import html
     return html.escape(t).replace("\u00A0", "&nbsp;")
+
 
 class TextNode:
     def __init__(self, text):
@@ -78,6 +53,7 @@ class TextNode:
         if len(inner) > 200:
             inner = inner[:100] + "..." + inner[-90:]
         return "'" + inner.replace("'", "'\"'\"'") + "'"
+
 
 class HTMLElement(object):
     def __init__(self, html, attributes):
