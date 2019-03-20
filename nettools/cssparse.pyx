@@ -22,6 +22,14 @@ freely, subject to the following restrictions:
 import html.parser
 
 
+cdef int SELECTOR_DEBUG = True
+
+
+cpdef enable_selector_debugging():
+    global SELECTOR_DEBUG
+    SELECTOR_DEBUG = True
+
+
 class CSSAttribute(object):
     def __init__(self, name, value):
         self.name = name.strip()
@@ -100,8 +108,7 @@ cdef class CSSSelector:
 
     def __init__(self, str selector_string):
         selector_string = selector_string.strip()
-        self.items = [i.strip() for i in selector_string.split()
-                      if len(i.strip()) > 0]
+        self.items = selector_string.split()
         self.applies_any = False
         if len(self.items) == 1 and self.items[0] == "*":
             self.applies_any = True
@@ -139,6 +146,12 @@ cdef class CSSSelector:
         item_selector = item_selector.partition("[")[0].strip()
 
         if item_selector == "*":
+            if SELECTOR_DEBUG:
+                print("nettools.cssparse.CSSSelector: " +
+                      "DEBUG: check_item" +
+                      str((item_selector, item_name, item_class, item_id)) +
+                      " -> True"
+                )
             return True
         selector_item_name = item_selector
         selector_item_class = ""
@@ -151,11 +164,35 @@ cdef class CSSSelector:
             selector_item_name = selector_item_name.rpartition("#")[0]
 
         if len(selector_item_name) > 0 and item_name != selector_item_name:
+            if SELECTOR_DEBUG:
+                print("nettools.cssparse.CSSSelector: " +
+                      "DEBUG: check_item" +
+                      str((item_selector, item_name, item_class, item_id)) +
+                      " -> False"
+                )
             return False
         if len(selector_item_class) > 0 and item_class != selector_item_class:
+            if SELECTOR_DEBUG:
+                print("nettools.cssparse.CSSSelector: " +
+                      "DEBUG: check_item" +
+                      str((item_selector, item_name, item_class, item_id)) +
+                      " -> False"
+                )
             return False
         if len(selector_item_id) > 0 and item_id != selector_item_id:
+            if SELECTOR_DEBUG:
+                print("nettools.cssparse.CSSSelector: " +
+                      "DEBUG: check_item" +
+                      str((item_selector, item_name, item_class, item_id)) +
+                      " -> False"
+                )
             return False
+        if SELECTOR_DEBUG:
+            print("nettools.cssparse.CSSSelector: " +
+                  "DEBUG: check_item" +
+                  str((item_selector, item_name, item_class, item_id)) +
+                  " -> True"
+            )
         return True
 
 
@@ -270,14 +307,43 @@ cdef class CSSRulesetCollection:
                                     get_next_parent_info=
                                         get_next_parent_info
                                     ):
+                if SELECTOR_DEBUG:
+                    print("nettools.cssparse.CSSRulesetCollection: " +
+                          "DEBUG: rule's applies_to_item" +
+                          str((item_name, item_class, item_id,
+                               get_next_parent_info)) +
+                          "=True, rule=" + str(rule))
                 for attr in rule.attributes:
                     if not attr.name in result_attributes:
+                        if SELECTOR_DEBUG:
+                            print("nettools.cssparse.CSSRulesetCollection: " +
+                                  "DEBUG: rule sets NEW attribute: " +
+                                  str(attr.name) + "='" +
+                                  str(attr.value) + "'")
                         result_attributes[attr.name] = (attr, rule)
                         continue
                     (old_attr, old_rule) = result_attributes[attr.name]
                     if rule.trumps_other_rule(old_rule):
+                        if SELECTOR_DEBUG:
+                            print("nettools.cssparse.CSSRulesetCollection: " +
+                                  "DEBUG: rule sets OVERRIDING attribute: " +
+                                  str(attr.name) + "='" + str(attr.value) +
+                                  "'   (overridden less specific rule: " +
+                                  str(old_rule) + ")")
                         result_attributes[attr.name] = (attr, rule)
-        return {v[0].name: v[0] for v in result_attributes.values()}
+                    else:
+                        if SELECTOR_DEBUG:
+                            print("nettools.cssparse.CSSRulesetCollection: " +
+                                  "DEBUG: rule sets IGNORED attribute: " +
+                                  str(attr.name) +
+                                  "   (more specific rule: " +
+                                  str(old_rule) + ")")
+        result = {v[0].name: v[0] for v in result_attributes.values()}
+        if SELECTOR_DEBUG:
+            print("nettools.cssparse.CSSRulesetCollection: " +
+                  "DEBUG: ruleset attributes result: " +
+                  str(result))
+        return result
 
 
 cpdef str extract_string_without_comments(str string):

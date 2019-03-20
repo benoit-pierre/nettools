@@ -60,6 +60,8 @@ def test_parse():
 
 
 def test_complex_selector_scenarios():
+    cssparse.enable_selector_debugging()
+
     result = cssparse.parse("""
         * {padding:5px}
         body {height:15px; padding:10px;}
@@ -75,6 +77,7 @@ def test_complex_selector_scenarios():
     attributes = result.get_item_attributes("body")
     assert(set(attributes.keys()) == {"height", "padding"})
     assert(attributes["height"].value == "15px")
+    assert(attributes["padding"].value == "10px")
 
     result = cssparse.parse("""
         body {height:15px; padding:10px;}
@@ -82,4 +85,5 @@ def test_complex_selector_scenarios():
     """)
     attributes = result.get_item_attributes("body")
     assert(set(attributes.keys()) == {"height", "padding"})
-    assert(attributes["height"].value == "5px")
+    assert(attributes["height"].value == "15px")
+    assert(attributes["padding"].value == "5px")
