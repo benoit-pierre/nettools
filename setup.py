@@ -28,6 +28,7 @@ from setuptools import setup, Extension, Command
 from setuptools.command.build_ext import build_ext
 import os
 
+
 class cythonize_build_ext_hook(build_ext):
     def run(self):
         from Cython.Build import cythonize
@@ -132,5 +133,3 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
 )
-
-
