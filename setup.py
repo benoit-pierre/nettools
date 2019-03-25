@@ -90,9 +90,26 @@ def extensions():
             result.append(Extension(module, [c_relpath]))
     return result
 
+VERSION=None
+with open(os.path.join(os.path.dirname(__file__),
+                       "nettools", "nettools_version.py"),
+          "r", encoding="utf-8") as f:
+    lines = f.read().splitlines()
+    for line in lines:
+        if line.strip().startswith("VERSION") and \
+                line.strip()[len("VERSION"):].strip().startswith("="):
+            VERSION = line.partition("=")[2].strip().partition("#")[0]
+            if VERSION.startswith("\"") and VERSION.endswith("\""):
+                VERSION = VERSION[1:-1].strip()
+            if VERSION.startswith("'") and VERSION.endswith("'"):
+                VERSION = VERSION[1:-1].strip()
+if VERSION is None:
+    raise RuntimeError("couldn't read nettools version!")            
+
+
 setuptools.setup(
     name="nettools",
-    version="0.1",
+    version=VERSION,
     cmdclass={
         "build_ext": cythonize_build_ext_hook
     },
@@ -105,6 +122,7 @@ setuptools.setup(
     package_data={"nettools": [
         "*.pxd",
     ]},
+    setup_requires=["Cython"],
     install_requires=dependencies,
     long_description=long_description,
     long_description_content_type="text/markdown",
