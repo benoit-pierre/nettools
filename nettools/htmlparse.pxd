@@ -19,20 +19,15 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 '''
 
-import os
-import sys
-sys.path = [os.path.abspath(os.path.join(
-                            os.path.dirname(__file__), ".."))] + sys.path
 
-import nettools.htmlparse as htmlparse
+cpdef parse_xml(xml)
 
-def test_parser():
-    result = htmlparse.parse("<a>&lt;3</a>")
-    result_html = str(result)
-    assert(result[0].serialize() == "<a>&lt;3</a>")
+cpdef parse(html, void_tags=*)
 
+cpdef str remove_html_comments(str t)
 
-def test_remove_html_comments():
-    assert(htmlparse.remove_html_comments(
-        "<ab> <!-- blubb < blabb ></test/> --><test><!-- 234 --></ab>"
-    ) == "<ab> <test></ab>")
+cpdef str linkify_html(str html_text, int linkify_with_blank_target=*)
+
+cpdef depth_first_walker(html, callback, visit_out_callback=*)
+
+cpdef str remove_html_comments(str t)

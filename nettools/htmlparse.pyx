@@ -35,7 +35,11 @@ cpdef str html_escape(t):
     return html.escape(t).replace("\u00A0", "&nbsp;")
 
 
-class TextNode:
+cdef class TextNode:
+    cdef public str content
+    cdef public str node_type
+    cdef public list children
+
     def __init__(self, text):
         self.content = text
         self.node_type = "text"
@@ -55,7 +59,12 @@ class TextNode:
         return "'" + inner.replace("'", "'\"'\"'") + "'"
 
 
-class HTMLElement(object):
+cdef class HTMLElement:
+    cdef public str content, node_type, name
+    cdef public int is_self_closing
+    cdef public list children, attributes_as_list
+    cdef public dict attributes
+
     def __init__(self, html, attributes):
         self.content = html
         self.node_type = "element"
@@ -81,7 +90,7 @@ class HTMLElement(object):
         self.attributes[key] = value
 
     def serialize_head(self):
-        t = "<" + self.name
+        cdef str t = "<" + self.name
         for a in [entry[0] for entry in self.attributes_as_list]:
             if self.attributes[a] is None:
                 t += " " + a
@@ -98,7 +107,7 @@ class HTMLElement(object):
         return t + ">"
 
     def serialize_children(self, prettify=False, indent=0):
-        t = ""
+        cdef str t = ""
         for child in self.children:
             t += child.serialize(prettify=prettify,
                 indent=indent)
@@ -106,14 +115,13 @@ class HTMLElement(object):
                 t += "\n"
         return t
 
-    def serialize(self, prettify=False, indent=0):
-        indent_prefix = ""
+    def serialize(self, int prettify=False, int indent=0):
+        cdef str indent_prefix = ""
         if prettify:
             indent_prefix = " " * (indent * 4)
         if self.is_self_closing:
-            return indent_prefix +\
-                self.serialize_head()
-        t = indent_prefix + self.serialize_head()
+            return indent_prefix + self.serialize_head()
+        cdef str t = indent_prefix + self.serialize_head()
         if prettify:
             t += "\n" 
         t += self.serialize_children(prettify=prettify,
@@ -122,21 +130,29 @@ class HTMLElement(object):
         return t
 
     def __repr__(self):
-        inner = self.serialize(prettify=False)
+        cdef str inner = self.serialize(prettify=False)
         if len(inner) > 200:
             inner = inner[:100] + "..." + inner[-90:]
         return "'" + inner.replace("'", "'\"'\"'") + "'"
 
+
+cdef int regfind(str haystack, str pattern):
+    result = re.search(pattern, haystack, re.MULTILINE)
+    if result != None:
+        return result.start()
+    return -1
+
+
 def parse_tag(html):
-    is_self_closing = False
-    is_closing = False
+    cdef int is_self_closing = False
+    cdef int is_closing = False
     in_quote_type = None
     in_quote_started_at = None
-    tag_name = ""
-    in_tag_name = False
-    seen_tag_name = False
+    cdef str tag_name = ""
+    cdef int in_tag_name = False
+    cdef int seen_tag_name = False
 
-    attributes = []
+    cdef list attributes = []
     seen_nonwhitespace_attr_value = False
     current_attr_name = ""
     current_attr_value = None
@@ -145,18 +161,13 @@ def parse_tag(html):
     def finish_attribute():
         nonlocal current_attr_name, current_attr_value
         if len(current_attr_name) > 0:
-            attributes.append((current_attr_name,
-                current_attr_value))
+            attributes.append((
+                current_attr_name, current_attr_value
+            ))
         current_attr_name = ""
         current_attr_value = None
 
-    def regfind(s, p):
-        result = re.search(p, s, re.MULTILINE)
-        if result != None:
-            return result.start()
-        return -1
-
-    i = -1
+    cdef int i = -1
     while (i < len(html) - 1):
         i += 1
         c = html[i]
@@ -257,17 +268,36 @@ def parse_tag(html):
     return (i + 1, tag_name, attributes,
         is_closing, is_self_closing)
 
-def parse_xml(xml):
+
+cpdef parse_xml(xml):
     return parse(xml, void_tags=[])
 
-def parse(html, void_tags=None):
+
+cpdef parse(html, void_tags=None):
     try:
         html = html.decode("utf-8", "replace")
     except AttributeError:
         pass
+    html = remove_html_comments(html)
     return parse_recurse(html, void_tags=void_tags)[1]
 
-def parse_recurse(html, void_tags=None, stop_at_closing=False):
+
+cpdef str remove_html_comments(str t):
+    cdef int next_comment_start = t.find("<!--")
+    while next_comment_start >= 0:
+        end_of_comment = t[next_comment_start:].find("-->")
+        if end_of_comment < 0:
+            break
+        end_of_comment += len("-->")
+        t = t[:next_comment_start] +\
+            t[next_comment_start + end_of_comment:]
+        next_comment_start = t.find("<!--")
+    return t
+
+
+cdef tuple parse_recurse(str html,
+                         void_tags=None,
+                         int stop_at_closing=False):
     if void_tags is None:
         void_tags = [
             "area", "base", "br", "col",
@@ -275,6 +305,11 @@ def parse_recurse(html, void_tags=None, stop_at_closing=False):
             "input", "keygen", "link", "meta",
             "param", "source", "track", "wbr",
         ]
+
+    # Variable types for vars used later:
+    cdef int parsed_chars, next_tag, is_closing_tag, is_self_closing_tag,\
+             tag_length, content_length
+    cdef str opening_tag, tag_name
 
     parsed_chars = 0
     result = []
@@ -340,7 +375,155 @@ def parse_recurse(html, void_tags=None, stop_at_closing=False):
 
     return (parsed_chars, result)
 
-def linkify_html(html_text, linkify_with_blank_target=True):
+
+cdef int len_if_url(str text):
+    if text.find(".") < 0:
+        return -1
+    if len(text.lstrip()) != len(text):
+        return -1
+    cdef int k = 0
+    cdef int confirmed_url = False
+    bracket_nesting = None
+    cdef int had_dot = False
+    while k < len(text):
+        if text[k:].startswith("://"):
+            if had_dot:
+                return -1
+            confirmed_url = True
+            k += len("://")
+            continue
+        elif text[k] != "%" and \
+                is_punctuation(text[k]) and \
+                text[k] != "." and text[k] != "/" and \
+                text[k] != "-":
+            if not had_dot:
+                return -1
+            if text[k] == "(" or text[k] == "[":
+                if bracket_nesting != None or \
+                        not confirmed_url:
+                    return -1
+                bracket_nesting = ")"
+                if text[k] == "[":
+                    bracket_nesting = "]"
+                k += 1
+                continue
+            else:
+                if bracket_nesting == text[k]:
+                    bracket_nesting = None
+                    k += 1
+                    continue
+                elif confirmed_url:
+                    return k
+                else:
+                    return -1
+        elif is_whitespace(text[k]):
+            if not confirmed_url:
+                return -1
+            if bracket_nesting != None and \
+                    text[k] == " " and \
+                    not is_punctuation(text[k - 1]):
+                k += 1
+                continue
+            if bracket_nesting != None:
+                if k > 0 and is_punctuation(text[k - 1]):
+                    k -= 1
+            return k
+        elif text[k] == "." and bracket_nesting is None:
+            if k == 0 or k == len(text) - 1 or \
+                    is_whitespace(text[k + 1]) or \
+                    is_punctuation(text[k + 1]):
+                if confirmed_url:
+                    return k
+                return -1
+            had_dot = True
+            common_endings = [
+                "com", "net", "org",
+                "de", "cn", "co.uk", "uk",
+                "info", "eu", "ru"
+            ]
+            for common_ending in common_endings:
+                if text[k + 1:].startswith(common_ending):
+                    if len(text) == k + 1 + len(common_ending):
+                        return len(text)
+                    c = text[k + 1 + len(common_ending)]
+                    if is_whitespace(c) or \
+                            is_punctuation(c) or \
+                            c == "/":
+                        if c != "/":
+                            return (k + 1 + len(common_ending))
+                        confirmed_url = True
+                        break
+        elif text[k] == "/":
+            if not had_dot:
+                return -1
+            confirmed_url = True
+        k += 1
+    if not confirmed_url:
+        return -1
+    return k
+
+
+cdef str clean_link(str link):
+    if link.find("://") < 0:
+        return ("https://" + link)
+    return link
+
+
+cdef list return_elements_as_linkified(
+        els, int linkify_with_blank_target=False
+        ):
+    cdef i, url_len, last_link_end
+    cdef str blank_addition
+    cdef list result = []
+    for el in els:
+        new_el = copy.copy(el)
+        if new_el.node_type == "element":
+            new_el.children = return_elements_as_linkified(
+                new_el.children,
+                linkify_with_blank_target=linkify_with_blank_target
+            )
+        elif new_el.node_type == "text":
+            if new_el.content.find("www.") < 0 and \
+                    new_el.content.find("/") < 0:
+                result.append(new_el)
+                continue
+            blank_addition = " target='_blank' rel=noopener"
+            if not linkify_with_blank_target:
+                blank_addition = ""
+            last_link_end = 0
+            i = 0
+            while i < len(new_el.content):
+                url_len = len_if_url(new_el.content[i:])
+                if url_len >= 0:
+                    if i > 0:
+                        text_el = TextNode(new_el.content[:i])
+                        result.append(text_el)
+                    result.append(parse(
+                        "<a href='" +
+                        html_escape(clean_link(
+                            new_el.content[i:i + url_len]
+                        )).replace("'", "&apos;") +
+                        "'" + blank_addition + ">" + html_escape(
+                        new_el.content[i:i + url_len]
+                        ) + "</a>"
+                    )[0])
+                    i += url_len
+                    last_link_end = i
+                    continue
+                i += 1
+            if i > last_link_end:
+                text_el = TextNode(new_el.content[last_link_end:])
+                result.append(text_el)
+            continue
+        else:
+            raise RuntimeError(
+                "unexpected node type: " + str(new_el.node_type)
+            )
+        result.append(new_el)
+    return result
+
+
+cpdef str linkify_html(str html_text, int linkify_with_blank_target=True):
     extracted_doctype = ""
     if html_text.lstrip().lower().startswith("<!doctype "):
         start_of_doctype = html_text.lower().find("<!doctype ")
@@ -351,147 +534,20 @@ def linkify_html(html_text, linkify_with_blank_target=True):
                     end_of_doctype + 1)]
                 html_text = html_text[len(extracted_doctype):]
     parsed_html = parse(html_text)
-    def linkified_elements(els):
-        def len_if_url(text):
-            if text.find(".") < 0:
-                return None
-            if len(text.lstrip()) != len(text):
-                return None
-            k = 0
-            confirmed_url = False
-            bracket_nesting = None
-            had_dot = False
-            while k < len(text):
-                if text[k:].startswith("://"):
-                    if had_dot:
-                        return None
-                    confirmed_url = True
-                    k += len("://")
-                    continue
-                elif text[k] != "%" and \
-                        is_punctuation(text[k]) and \
-                        text[k] != "." and text[k] != "/" and \
-                        text[k] != "-":
-                    if not had_dot:
-                        return None
-                    if text[k] == "(" or text[k] == "[":
-                        if bracket_nesting != None or \
-                                not confirmed_url:
-                            return None
-                        bracket_nesting = ")"
-                        if text[k] == "[":
-                            bracket_nesting = "]"
-                        k += 1
-                        continue
-                    else:
-                        if bracket_nesting == text[k]:
-                            bracket_nesting = None
-                            k += 1
-                            continue
-                        elif confirmed_url:
-                            return k
-                        else:
-                            return None
-                elif is_whitespace(text[k]):
-                    if not confirmed_url:
-                        return None
-                    if bracket_nesting != None and \
-                            text[k] == " " and \
-                            not is_punctuation(text[k - 1]):
-                        k += 1
-                        continue
-                    if bracket_nesting != None:
-                        if k > 0 and is_punctuation(text[k - 1]):
-                            k -= 1
-                    return k
-                elif text[k] == "." and bracket_nesting is None:
-                    if k == 0 or k == len(text) - 1 or \
-                            is_whitespace(text[k + 1]) or \
-                            is_punctuation(text[k + 1]):
-                        if confirmed_url:
-                            return k
-                        return None
-                    had_dot = True
-                    common_endings = ["com", "net", "org",
-                        "de", "cn", "co.uk", "uk",
-                        "info", "eu", "ru"]
-                    for common_ending in common_endings:
-                        if text[k + 1:].startswith(common_ending):
-                            if len(text) == k + 1 + len(common_ending):
-                                return len(text)
-                            c = text[k + 1 + len(common_ending)]
-                            if is_whitespace(c) or \
-                                    is_punctuation(c) or \
-                                    c == "/":
-                                if c != "/":
-                                    return (k + 1 + len(common_ending))
-                                confirmed_url = True
-                                break
-                elif text[k] == "/":
-                    if not had_dot:
-                        return None
-                    confirmed_url = True
-                k += 1
-            if not confirmed_url:
-                return None
-            return k
-
-        result = []
-        for el in els:
-            new_el = copy.copy(el)
-            if new_el.node_type == "element":
-                new_el.children = linkified_elements(new_el.children)
-            elif new_el.node_type == "text":
-                if new_el.content.find("www.") < 0 and \
-                        new_el.content.find("/") < 0:
-                    result.append(new_el)
-                    continue
-                def clean_link(link):
-                    if link.find("://") < 0:
-                        return ("https://" + link)
-                    return link
-                blank_addition = " target='_blank' rel=noopener"
-                if not linkify_with_blank_target:
-                    blank_addition = ""
-                last_link_end = 0
-                i = 0
-                while i < len(new_el.content):
-                    url_len = len_if_url(new_el.content[i:])
-                    if url_len != None:
-                        if i > 0:
-                            text_el = TextNode(new_el.content[:i])
-                            result.append(text_el)
-                        result.append(parse("<a href='" +
-                            html_escape(clean_link(
-                            new_el.content[i:i + url_len])).
-                            replace("'", "&apos;") +
-                            "'" + blank_addition + ">" + html_escape(
-                            new_el.content[i:i + url_len]) +
-                            "</a>")[0])
-                        i += url_len
-                        last_link_end = i
-                        continue
-                    i += 1
-                if i > last_link_end:
-                    text_el = TextNode(new_el.content[last_link_end:])
-                    result.append(text_el)
-                continue
-            else:
-                raise RuntimeError("unexpected node type: " +
-                    str(new_el.node_type))
-            result.append(new_el)
-        return result
-    parsed_html = linkified_elements(parsed_html)
-    result = ""
+    parsed_html = return_elements_as_linkified(
+        parsed_html, linkify_with_blank_target=linkify_with_blank_target
+    )
+    cdef str result = ""
     for parsed_el in parsed_html:
         result += parsed_el.serialize()
     return extracted_doctype + result
 
-def depth_first_walker(html, callback, visit_out_callback=None):
+
+cpdef depth_first_walker(html, callback, visit_out_callback=None):
     result = parse(html)
     if len(result) == 0:
         return None
-    nestings = [(result, 0)]
+    cdef list nestings = [(result, 0)]
     current_element = result[0]
     while True:
         result = callback(current_element)
@@ -539,4 +595,3 @@ def depth_first_walker(html, callback, visit_out_callback=None):
     if current_element != None:
         return current_element
     return None
-
