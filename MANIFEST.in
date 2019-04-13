@@ -1,4 +1,4 @@
-recursive-include src *.pyx *.pxd *.py
+recursive-include nettools *.pyx *.pxd *.py
 include setup.py
 include *.md
 include requirements.txt
