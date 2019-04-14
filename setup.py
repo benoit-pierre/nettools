@@ -123,7 +123,6 @@ setuptools.setup(
     package_data={"nettools": [
         "*.pxd",
     ]},
-    setup_requires=["Cython"],
     install_requires=dependencies,
     long_description=long_description,
     long_description_content_type="text/markdown",
